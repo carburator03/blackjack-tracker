@@ -24,11 +24,11 @@ const Login: React.FC = () => {
   return (
     <>
       <Navbar />
-      <div className='flex flex-col items-center justify-center min-h-screen bg-gray-100'>
-        <h1 className='text-4xl font-bold text-center mt-5 text-primary mx-4 sm:mx-0'>
+      <div className='flex flex-col items-center justify-center min-h-screen bg-gray-100 px-8'>
+        <h1 className='text-4xl font-bold text-center mt-5 text-primary'>
           Login to Blackjack-Tracker
         </h1>
-        <form onSubmit={handleSubmit} className='w-full max-w-sm mt-8 mx-4 sm:mx-0'>
+        <form onSubmit={handleSubmit} className='w-full max-w-sm mt-8'>
           <div className='mb-4'>
             <label className='block text-gray-700 text-sm font-bold mb-2'>Username:</label>
             <input
@@ -46,9 +46,9 @@ const Login: React.FC = () => {
               onChange={e => setPassword(e.target.value)}
             />
           </div>
-          {error && <p className='text-red-600 text-m italic mb-4'>{error}</p>}
+          {error && <p className='text-error text-m italic mb-4'>{error}</p>}
           <div className='flex items-center justify-between'>
-            <button type='submit' className='btn btn-primary w-full'>
+            <button type='submit' className='btn btn-primary w-1/2 mx-auto'>
               Login
             </button>
           </div>

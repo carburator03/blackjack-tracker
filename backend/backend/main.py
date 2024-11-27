@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel
@@ -8,15 +10,18 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Database settings
-DATABASE_URL = ""
+DATABASE_URL = os.getenv("DATABASE_URL")
 Base = declarative_base()
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
 # JWT settings
-SECRET_KEY = ""
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -32,7 +37,7 @@ app = FastAPI()
 # CORS settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://blackjack-tracker:80"],  # React app URL
+    allow_origins=[os.getenv("ALLOW_ORIGIN")],  # React app URL
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all HTTP headers
@@ -63,11 +68,6 @@ class Game(Base):
 class UserBase(BaseModel):
     username: str
 
-class RegisterRequest(BaseModel):
-    username: str
-    password: str
-    wallet: int = 0
-
 class UserInDB(UserBase):
     password: str
 
@@ -88,6 +88,7 @@ class GameResponse(BaseModel):
     prize: int
     user_id: int
     win: bool
+    createdAt: datetime
 
     class Config:
         orm_mode = True
@@ -102,6 +103,14 @@ class GameCreateRequest(BaseModel):
 
 class PriceUpdateRequest(BaseModel):
     price: int
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+class TokenRequest(BaseModel):
+    username: str
+    password: str
 
 # Utility functions
 def verify_password(plain_password, hashed_password):
@@ -142,28 +151,32 @@ def get_db():
     finally:
         db.close()
 
+@app.post("/health")
+def health():
+    return {"status": "ok"}
+
 # Routes
 @app.post("/register")
-def register(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    if get_user(form_data.username, db):
+def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    if get_user(request.username, db):
         raise HTTPException(status_code=400, detail="User already exists with this username!")
-    if len(form_data.username) < 3:
+    if len(request.username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters long!")
-    if len(form_data.password) < 6:
+    if len(request.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters long!")
-    new_user = User(username=form_data.username, password=get_password_hash(form_data.password), wallet=0)
+    new_user = User(username=request.username, password=get_password_hash(request.password), wallet=0)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     return {"message": "User registered successfully!"}
 
 @app.post("/token", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    if len(form_data.username) < 3:
+def login(request: TokenRequest, db: Session = Depends(get_db)):
+    if len(request.username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters long!")
-    if len(form_data.password) < 6:
+    if len(request.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters long!")
-    user = authenticate_user(form_data.username, form_data.password, db)
+    user = authenticate_user(request.username, request.password, db)
     if not user:
         raise HTTPException(status_code=400, detail="Invalid credentials!")
     access_token = create_access_token(data={"sub": user.username})

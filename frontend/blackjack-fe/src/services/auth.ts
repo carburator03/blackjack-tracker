@@ -2,18 +2,21 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 
-const API_URL = '';
+const API_URL = import.meta.env.VITE_API_URL;
 
 export async function login(username: string, password: string) {
-  const params = new URLSearchParams();
-  params.append('username', username);
-  params.append('password', password);
-
-  const response = await axios.post(`${API_URL}/token`, params, {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
+  const response = await axios.post(
+    `${API_URL}/token`,
+    {
+      username,
+      password,
     },
-  });
+    {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    },
+  );
 
   if (response.data.access_token) {
     localStorage.setItem('token', response.data.access_token);
@@ -26,16 +29,19 @@ export function logout() {
 }
 
 export async function register(username: string, password: string) {
-  const params = new URLSearchParams();
-  params.append('username', username);
-  params.append('password', password);
-
   try {
-    const response = await axios.post(`${API_URL}/register`, params, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+    const response = await axios.post(
+      `${API_URL}/register`,
+      {
+        username,
+        password,
       },
-    });
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      },
+    );
     return response.data;
   } catch (error: any) {
     console.error('Registration error:', error.response?.data || error.message);

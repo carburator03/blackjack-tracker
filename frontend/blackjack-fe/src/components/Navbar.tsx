@@ -12,12 +12,15 @@ const Navbar = ({ walletRefresh }: NavbarProps) => {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [fetchedUsername, fetchedWallet] = await Promise.all([
-          getLoggedInUsername(),
-          getWallet(),
-        ]);
-        setUsername(fetchedUsername);
-        setWallet(fetchedWallet);
+        const token = localStorage.getItem('token');
+        if (token) {
+          const [fetchedUsername, fetchedWallet] = await Promise.all([
+            getLoggedInUsername(),
+            getWallet(),
+          ]);
+          setUsername(fetchedUsername);
+          setWallet(fetchedWallet);
+        }
       } catch (error) {
         console.error('Error fetching data:', (error as Error).message);
       }
@@ -28,14 +31,14 @@ const Navbar = ({ walletRefresh }: NavbarProps) => {
 
   const getWalletColor = () => {
     if (wallet === null) return 'text-white';
-    if (wallet < 0) return 'text-red-600';
-    if (wallet > 0) return 'text-green-600';
+    if (wallet < 0) return 'text-error';
+    if (wallet > 0) return 'text-success';
     return 'text-white';
   };
 
   return (
-    <div className='flex items-center justify-between p-4 bg-[#061200] text-white'>
-      <div className='flex items-center'>
+    <div className='flex flex-col sm:flex-row items-center justify-between p-4 bg-[#061200] text-white'>
+      <div className='flex items-center mb-4 sm:mb-0'>
         <div
           className='text-lg font-bold cursor-pointer'
           onClick={() => (window.location.href = '/')}
@@ -44,7 +47,7 @@ const Navbar = ({ walletRefresh }: NavbarProps) => {
         </div>
         {username && (
           <button
-            className='btn btn-primary ml-5 text-base'
+            className='btn btn-primary ml-5'
             onClick={() => (window.location.href = '/dashboard')}
           >
             Dashboard
@@ -63,7 +66,7 @@ const Navbar = ({ walletRefresh }: NavbarProps) => {
               </div>
             </div>
             <button
-              className='btn btn-secondary ml-5 text-base'
+              className='btn btn-secondary ml-5'
               onClick={() => (window.location.href = '/logout')}
             >
               Logout

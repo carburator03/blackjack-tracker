@@ -15,7 +15,7 @@ const Register: React.FC = () => {
     setErrorMessage('');
 
     if (password !== confirmPassword) {
-      setErrorMessage('Oopsies, passwords do not match! 😐');
+      setErrorMessage('Oh no, passwords do not match! 😐');
       return;
     }
 
@@ -45,13 +45,13 @@ const Register: React.FC = () => {
   return (
     <>
       <Navbar />
-      <div className='flex flex-col items-center justify-center min-h-screen bg-gray-100'>
-        <h1 className='text-4xl font-bold text-center mt-5 text-primary mx-4 sm:mx-0'>
+      <div className='flex flex-col items-center justify-center min-h-screen bg-gray-100 px-8'>
+        <h1 className='text-4xl font-bold text-center mt-5 text-primary'>
           Register for Blackjack-Tracker
         </h1>
-        <form onSubmit={handleSubmit} className='w-full max-w-sm mt-8 mx-4 sm:mx-0'>
-          {successMessage && <p className='text-green-600 text-l italic mb-4'>{successMessage}</p>}
-          {errorMessage && <p className='text-red-600 text-l italic mb-4'>{errorMessage}</p>}
+        <form onSubmit={handleSubmit} className='w-full max-w-sm mt-8'>
+          {successMessage && <p className='text-success text-l italic mb-4'>{successMessage}</p>}
+          {errorMessage && <p className='text-error text-l italic mb-4'>{errorMessage}</p>}
           <div className='mb-4'>
             <label className='block text-gray-700 text-sm font-bold mb-2'>Username:</label>
             <input
@@ -83,7 +83,7 @@ const Register: React.FC = () => {
             />
           </div>
           <div className='flex items-center justify-between'>
-            <button type='submit' className='btn btn-primary w-full'>
+            <button type='submit' className='btn btn-primary w-1/2 mx-auto'>
               Register
             </button>
           </div>

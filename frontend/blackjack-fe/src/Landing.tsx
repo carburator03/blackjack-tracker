@@ -14,13 +14,13 @@ const Landing = () => {
 
         <div className='flex space-x-4'>
           <button
-            className='btn btn-secondary mr-2 font-bold'
+            className='btn btn-primary mr-2 font-bold'
             onClick={() => (window.location.href = '/login')}
           >
             Login
           </button>
           <button
-            className='btn btn-primary font-bold'
+            className='btn btn-secondary font-bold'
             onClick={() => (window.location.href = '/register')}
           >
             Register

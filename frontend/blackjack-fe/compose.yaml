@@ -1,7 +1,12 @@
 services:
   frontend:
-    image: blackjack-frontend
+    container_name: blackjack-frontend
+    image: carburator03/private-stuff:blackjack_fe_v1
     ports:
       - '3000:80'
     networks:
-      - blackjack-network
+      - traefik
+
+networks:
+  traefik:
+    external: true

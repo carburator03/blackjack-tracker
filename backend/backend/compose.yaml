@@ -1,25 +1,38 @@
-version: '3.8'
-
 services:
   db:
+    container_name: blackjack-db
     image: postgres:13
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD:
-      POSTGRES_DB:
+      POSTGRES_PASSWORD: SzaRaKolcseYYY!
+      POSTGRES_DB: blackjack
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+        - "10001:5432"
+    networks:
+        - traefik
+    healthcheck:
+      test: ["CMD", "curl", "-f", "https://apiblackjack:8990/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   web:
-    build: .
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
-    volumes:
-      - .:/app
+    container_name: blackjack-backend
+    image: carburator03/private-stuff:blackjack_be_v1
+    command: uvicorn main:app --host blackjack-backend --port 8990
     ports:
-      - "8000:8000"
+      - "8990:8990"
     depends_on:
       - db
+    networks:
+        - traefik
 
 volumes:
   postgres_data:
+
+networks:
+  traefik:
+    external: true

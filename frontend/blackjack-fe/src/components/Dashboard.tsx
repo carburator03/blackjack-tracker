@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import GamesTable from './GamesTable';
 import Navbar from './Navbar';
 import AddNewModal from './AddNewModal';
@@ -13,8 +13,10 @@ const Dashboard = () => {
   return (
     <>
       <Navbar walletRefresh={refresh} />
-      <AddNewModal onGameAdded={handleGameAdded} />
-      <GamesTable refresh={refresh} />
+      <div className='px-4'>
+        <AddNewModal onGameAdded={handleGameAdded} />
+        <GamesTable refresh={refresh} />
+      </div>
     </>
   );
 };
