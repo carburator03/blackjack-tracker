@@ -56,9 +56,12 @@ const AddNewModal = ({ onGameAdded }: { onGameAdded: () => void }) => {
       if (modal) {
         modal.close();
       }
-    } catch (error) {
-      setErrorMessage((error as Error).message);
-      console.error('Error adding games:', (error as Error).message);
+    } catch (err: any) {
+      if (err.response && err.response.data && err.response.data.detail) {
+        setErrorMessage(err.response.data.detail);
+      } else {
+        setErrorMessage('An unexpected error occurred.');
+      }
     }
   };
 
@@ -80,7 +83,7 @@ const AddNewModal = ({ onGameAdded }: { onGameAdded: () => void }) => {
       <dialog id='my_modal_5' className='modal modal-top sm:modal-middle'>
         <div className='modal-box bg-gray-100'>
           <h3 className='font-bold text-lg'>Add a new ticket</h3>
-          {errorMessage && <p className='text-red-500 text-l mb-4'>{errorMessage}</p>}
+          {errorMessage && <p className='text-red-600 text-l mb-4'>{errorMessage}</p>}
           <form onSubmit={handleSubmit}>
             <div className='py-4'>
               <label className='block text-sm font-bold mb-2'>Price of the ticket:</label>

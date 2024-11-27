@@ -10,13 +10,13 @@ from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
 
 # Database settings
-DATABASE_URL = "postgresql://postgres:szarakolcsey@localhost:5432/blackjack"
+DATABASE_URL = ""
 Base = declarative_base()
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
 # JWT settings
-SECRET_KEY = "4ATaU24m8JNn95xp4hV68C7p4WpVRW28"
+SECRET_KEY = ""
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -32,7 +32,7 @@ app = FastAPI()
 # CORS settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # React app URL
+    allow_origins=["http://blackjack-tracker:80"],  # React app URL
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all HTTP headers
@@ -190,6 +190,10 @@ def create_game(game: list[GameCreateRequest], db: Session = Depends(get_db), to
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     for g in game:
+        if g.number1 < 1 or g.number1 > 21 or g.number2 < 1 or g.number2 > 31 or g.number3 < 1 or g.number3 > 21 or g.number4 < 1 or g.number4 > 21 or g.dealer < 1 or g.dealer > 21:
+            raise HTTPException(status_code=400, detail="Numbers must be between 1 and 21")
+        if g.prize < 300:
+            raise HTTPException(status_code=400, detail="Prize must be at least 300")
         new_game = Game(
             number1=g.number1,
             number2=g.number2,
@@ -198,7 +202,8 @@ def create_game(game: list[GameCreateRequest], db: Session = Depends(get_db), to
             dealer=g.dealer,
             prize=g.prize,
             user_id=user.id,
-            win=False
+            win=False,
+            createdAt=datetime.utcnow().isoformat()
         )
 
         if new_game.number1 > new_game.dealer or new_game.number2 > new_game.dealer or new_game.number3 > new_game.dealer or new_game.number4 > new_game.dealer:

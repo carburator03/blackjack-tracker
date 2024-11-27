@@ -2,7 +2,7 @@
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = '';
 
 export async function login(username: string, password: string) {
   const params = new URLSearchParams();
