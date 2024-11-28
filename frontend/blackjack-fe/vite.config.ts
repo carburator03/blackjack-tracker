@@ -10,9 +10,9 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
       manifest: {
         name: 'Blackjack Tracker',
-        short_name: 'Blackjack',
+        short_name: 'Blackjack Tracker',
         description: 'Simple tool to track how much money you wasted',
-        theme_color: '#266104',
+        theme_color: '#0369a1',
         icons: [
           {
             src: 'manifest-icon-192.maskable.png',

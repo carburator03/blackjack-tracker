@@ -36,7 +36,7 @@ const GamesTable = ({ refresh }: { refresh: boolean }) => {
             <h2 className='text-xl font-bold mb-4'>
               {format(parseISO(month + '-01'), 'MMMM yyyy')}
             </h2>
-            <div className='hidden sm:block'>
+            <div className='hidden md:block'>
               <table className='table table-zebra w-full'>
                 <thead>
                   <tr className='text-base'>
@@ -66,7 +66,7 @@ const GamesTable = ({ refresh }: { refresh: boolean }) => {
                 </tbody>
               </table>
             </div>
-            <div className='block sm:hidden'>
+            <div className='block md:hidden'>
               {groupedGames[month].map((game: any) => (
                 <div key={game.id} className='mb-4 p-4 border rounded-lg'>
                   <div className='mb-2'>

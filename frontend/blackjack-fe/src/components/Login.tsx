@@ -24,7 +24,7 @@ const Login: React.FC = () => {
   return (
     <>
       <Navbar />
-      <div className='flex flex-col items-center justify-center min-h-screen bg-gray-100 px-8'>
+      <div className='flex flex-col items-center justify-center min-h-screen px-8'>
         <h1 className='text-4xl font-bold text-center mt-5 text-primary'>
           Login to Blackjack-Tracker
         </h1>

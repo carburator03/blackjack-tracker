@@ -1,9 +1,9 @@
 {
   "name": "Blackjack Tracker",
-  "short_name": "Blackjack",
+  "short_name": "Blackjack Tracker",
   "description": "Simple tool to track how much money you wasted",
-  "theme_color": "#266104",
-  "background_color": "#d4ebc7",
+  "theme_color": "#0369a1",
+  "background_color": "#011c30",
   "display": "standalone",
   "scope": "/",
   "start_url": "/",
