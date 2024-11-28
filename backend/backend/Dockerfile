@@ -19,4 +19,4 @@ COPY . .
 EXPOSE 8990
 
 # Command to run the application
-CMD ["uvicorn", "main:app", "--host", "blackjack-backend", "--port", "8990"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8990"]

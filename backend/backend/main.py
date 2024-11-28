@@ -1,16 +1,20 @@
 import os
-
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy import create_engine, Column, Integer, String, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DATETIME
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse
+from slowapi.middleware import SlowAPIMiddleware
 
 load_dotenv()
 
@@ -32,7 +36,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # FastAPI app
-app = FastAPI()
+app = FastAPI(docs_url=None, redoc_url=None)
 
 # CORS settings
 app.add_middleware(
@@ -42,6 +46,9 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all HTTP headers
 )
+
+# Add SlowAPI middleware
+app.add_middleware(SlowAPIMiddleware)
 
 # Database models
 class User(Base):
@@ -62,7 +69,7 @@ class Game(Base):
     prize = Column(Integer)
     user_id = Column(Integer)
     win = Column(Boolean, default=True)
-    createdAt = Column(String)
+    createdAt = Column(DATETIME)
 
 # Pydantic models
 class UserBase(BaseModel):
@@ -86,12 +93,8 @@ class GameResponse(BaseModel):
     number4: int
     dealer: int
     prize: int
-    user_id: int
     win: bool
     createdAt: datetime
-
-    class Config:
-        orm_mode = True
 
 class GameCreateRequest(BaseModel):
     number1: int
@@ -121,28 +124,40 @@ def get_password_hash(password):
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 def get_user(username: str, db):
     return db.query(User).filter(User.username == username).first()
 
 def authenticate_user(username: str, password: str, db):
     user = get_user(username, db)
-    if not user or not verify_password(password, user.password):
+    if not user:
+        return False
+    if not verify_password(password, user.password):
         return False
     return user
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return username
+            raise credentials_exception
+        token_data = TokenData(username=username)
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise credentials_exception
+    return token_data.username
 
 def get_db():
     db = SessionLocal()
@@ -151,43 +166,75 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/health")
-def health():
-    return {"status": "ok"}
+# Define the rate limit as a variable
+RATE_LIMIT = "50/1hour"
 
-# Routes
+banned_ips = set()
+# Initialize Limiter with a custom key function and storage
+limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT])
+
+# Add middleware for rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Custom exception handler for banning IPs
+@app.exception_handler(RateLimitExceeded)
+async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    ip = get_remote_address(request)
+    banned_ips.add(ip)
+    return JSONResponse(
+        status_code=429,
+        content={"message": "Too many requests, you are banned for 99 days."}
+    )
+
+@app.middleware("http")
+async def check_banned_ips(request: Request, call_next):
+    ip = get_remote_address(request)
+    if ip in banned_ips:
+        return JSONResponse(
+            status_code=403,
+            content={"message": "Your IP is banned."}
+        )
+    response = await call_next(request)
+    return response
+
+# Routes with rate limiting
 @app.post("/register")
-def register(request: RegisterRequest, db: Session = Depends(get_db)):
-    if get_user(request.username, db):
+@limiter.limit(RATE_LIMIT)
+def register(request: Request, register_request: RegisterRequest, db: Session = Depends(get_db)):
+    if get_user(register_request.username, db):
         raise HTTPException(status_code=400, detail="User already exists with this username!")
-    if len(request.username) < 3:
+    if len(register_request.username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters long!")
-    if len(request.password) < 6:
+    if len(register_request.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters long!")
-    new_user = User(username=request.username, password=get_password_hash(request.password), wallet=0)
+    new_user = User(username=register_request.username, password=get_password_hash(register_request.password), wallet=0)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     return {"message": "User registered successfully!"}
 
 @app.post("/token", response_model=Token)
-def login(request: TokenRequest, db: Session = Depends(get_db)):
-    if len(request.username) < 3:
+@limiter.limit(RATE_LIMIT)
+def login(request: Request, token_request: TokenRequest, db: Session = Depends(get_db)):
+    if len(token_request.username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters long!")
-    if len(request.password) < 6:
+    if len(token_request.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters long!")
-    user = authenticate_user(request.username, request.password, db)
+    user = authenticate_user(token_request.username, token_request.password, db)
     if not user:
         raise HTTPException(status_code=400, detail="Invalid credentials!")
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/me", response_model=UserBase)
-def read_users_me(current_user: UserBase = Depends(get_current_user)):
+@limiter.limit(RATE_LIMIT)
+def read_users_me(request: Request, current_user: UserBase = Depends(get_current_user)):
     return {"username": current_user}
 
 @app.get("/games", response_model=list[GameResponse])
-def get_games(db: Session = Depends(get_db), current_user: UserBase = Depends(get_current_user)):
+@limiter.limit(RATE_LIMIT)
+def get_games(request: Request, db: Session = Depends(get_db), current_user: UserBase = Depends(get_current_user)):
     user = db.query(User).filter(User.username == current_user).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -195,7 +242,8 @@ def get_games(db: Session = Depends(get_db), current_user: UserBase = Depends(ge
     return games
 
 @app.post("/games")
-def create_game(game: list[GameCreateRequest], db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+@limiter.limit(RATE_LIMIT)
+def create_game(request: Request, game: list[GameCreateRequest], db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     if len(game) != 1 and len(game) != 4:
         raise HTTPException(status_code=400, detail="Invalid game data")
     username = get_current_user(token)
@@ -238,7 +286,8 @@ def create_game(game: list[GameCreateRequest], db: Session = Depends(get_db), to
     return {"message": "Game added successfully!", "game": new_game}
 
 @app.get("/wallet")
-def get_wallet(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+@limiter.limit(RATE_LIMIT)
+def get_wallet(request: Request, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     username = get_current_user(token)
     user = db.query(User).filter(User.username == username).first()
     if not user:
@@ -246,7 +295,8 @@ def get_wallet(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme
     return {"wallet": user.wallet}
 
 @app.post("/update_wallet")
-def update_wallet(price_update: PriceUpdateRequest, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+@limiter.limit(RATE_LIMIT)
+def update_wallet(request: Request, price_update: PriceUpdateRequest, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     username = get_current_user(token)
     user = db.query(User).filter(User.username == username).first()
     if not user:
