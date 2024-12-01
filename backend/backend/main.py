@@ -4,17 +4,12 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DATETIME
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime, timedelta
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from fastapi.responses import JSONResponse
-from slowapi.middleware import SlowAPIMiddleware
 
 load_dotenv()
 
@@ -47,9 +42,6 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all HTTP headers
 )
 
-# Add SlowAPI middleware
-app.add_middleware(SlowAPIMiddleware)
-
 # Database models
 class User(Base):
     __tablename__ = "users"
@@ -69,7 +61,7 @@ class Game(Base):
     prize = Column(Integer)
     user_id = Column(Integer)
     win = Column(Boolean, default=True)
-    createdAt = Column(DATETIME)
+    createdAt = Column(DateTime)
 
 # Pydantic models
 class UserBase(BaseModel):
@@ -114,6 +106,9 @@ class RegisterRequest(BaseModel):
 class TokenRequest(BaseModel):
     username: str
     password: str
+
+class GameDeleteRequest(BaseModel):
+    id: int
 
 # Utility functions
 def verify_password(plain_password, hashed_password):
@@ -166,42 +161,9 @@ def get_db():
     finally:
         db.close()
 
-# Define the rate limit as a variable
-RATE_LIMIT = "50/1hour"
-
-banned_ips = set()
-# Initialize Limiter with a custom key function and storage
-limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT])
-
-# Add middleware for rate limiting
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-# Custom exception handler for banning IPs
-@app.exception_handler(RateLimitExceeded)
-async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    ip = get_remote_address(request)
-    banned_ips.add(ip)
-    return JSONResponse(
-        status_code=429,
-        content={"message": "Too many requests, you are banned for 99 days."}
-    )
-
-@app.middleware("http")
-async def check_banned_ips(request: Request, call_next):
-    ip = get_remote_address(request)
-    if ip in banned_ips:
-        return JSONResponse(
-            status_code=403,
-            content={"message": "Your IP is banned."}
-        )
-    response = await call_next(request)
-    return response
-
-# Routes with rate limiting
+# Routes without rate limiting
 @app.post("/register")
-@limiter.limit(RATE_LIMIT)
-def register(request: Request, register_request: RegisterRequest, db: Session = Depends(get_db)):
+def register(register_request: RegisterRequest, db: Session = Depends(get_db)):
     if get_user(register_request.username, db):
         raise HTTPException(status_code=400, detail="User already exists with this username!")
     if len(register_request.username) < 3:
@@ -215,8 +177,7 @@ def register(request: Request, register_request: RegisterRequest, db: Session = 
     return {"message": "User registered successfully!"}
 
 @app.post("/token", response_model=Token)
-@limiter.limit(RATE_LIMIT)
-def login(request: Request, token_request: TokenRequest, db: Session = Depends(get_db)):
+def login(token_request: TokenRequest, db: Session = Depends(get_db)):
     if len(token_request.username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters long!")
     if len(token_request.password) < 6:
@@ -228,13 +189,11 @@ def login(request: Request, token_request: TokenRequest, db: Session = Depends(g
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/me", response_model=UserBase)
-@limiter.limit(RATE_LIMIT)
-def read_users_me(request: Request, current_user: UserBase = Depends(get_current_user)):
+def read_users_me(current_user: UserBase = Depends(get_current_user)):
     return {"username": current_user}
 
 @app.get("/games", response_model=list[GameResponse])
-@limiter.limit(RATE_LIMIT)
-def get_games(request: Request, db: Session = Depends(get_db), current_user: UserBase = Depends(get_current_user)):
+def get_games(db: Session = Depends(get_db), current_user: UserBase = Depends(get_current_user)):
     user = db.query(User).filter(User.username == current_user).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -242,8 +201,7 @@ def get_games(request: Request, db: Session = Depends(get_db), current_user: Use
     return games
 
 @app.post("/games")
-@limiter.limit(RATE_LIMIT)
-def create_game(request: Request, game: list[GameCreateRequest], db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+def create_game(game: list[GameCreateRequest], db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     if len(game) != 1 and len(game) != 4:
         raise HTTPException(status_code=400, detail="Invalid game data")
     username = get_current_user(token)
@@ -286,22 +244,26 @@ def create_game(request: Request, game: list[GameCreateRequest], db: Session = D
     return {"message": "Game added successfully!", "game": new_game}
 
 @app.get("/wallet")
-@limiter.limit(RATE_LIMIT)
-def get_wallet(request: Request, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+def get_wallet(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     username = get_current_user(token)
     user = db.query(User).filter(User.username == username).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {"wallet": user.wallet}
 
-@app.post("/update_wallet")
-@limiter.limit(RATE_LIMIT)
-def update_wallet(request: Request, price_update: PriceUpdateRequest, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+
+@app.delete("/games")
+def delete_game(game_delete_request: GameDeleteRequest, db: Session = Depends(get_db),
+                token: str = Depends(oauth2_scheme)):
     username = get_current_user(token)
     user = db.query(User).filter(User.username == username).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user.wallet += price_update.price
+
+    game = db.query(Game).filter(Game.id == game_delete_request.id, Game.user_id == user.id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found or does not belong to the user")
+
+    db.delete(game)
     db.commit()
-    db.refresh(user)
-    return {"message": "Wallet updated successfully!", "wallet": user.wallet}
+    return {"message": "Game deleted successfully"}

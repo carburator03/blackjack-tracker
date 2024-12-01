@@ -109,3 +109,19 @@ export async function getWallet() {
   });
   return response.data.wallet;
 }
+
+export async function deleteGame(gameId: string) {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    throw new Error('No token found');
+  }
+  const response = await axios.delete(`${API_URL}/games`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    data: {
+      id: gameId,
+    },
+  });
+  return response.data;
+}

@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
-import { getGames } from '../services/auth';
+import { getGames, deleteGame } from '../services/auth';
 import { format, parseISO } from 'date-fns';
+import { Trash2 } from 'lucide-react';
 
 const GamesTable = ({ refresh }: { refresh: boolean }) => {
   const [games, setGames] = useState([]);
+  const [message, setMessage] = useState<string | null>(null);
+  const [messageColor, setMessageColor] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchGames() {
@@ -18,6 +21,25 @@ const GamesTable = ({ refresh }: { refresh: boolean }) => {
     fetchGames();
   }, [refresh]);
 
+  const handleDelete = async (gameId: string) => {
+    try {
+      const response = await deleteGame(gameId);
+      setMessage(response.message);
+      setMessageColor('text-success');
+      // Refresh the games list after deletion
+      const data = await getGames();
+      setGames(data);
+    } catch (error: any) {
+      if (error.response && error.response.status === 404) {
+        setMessage('Game not found');
+        setMessageColor('text-error');
+      } else {
+        setMessage('An error occurred');
+        setMessageColor('text-error');
+      }
+    }
+  };
+
   const groupedGames = games.reduce((acc: any, game: any) => {
     const date = parseISO(game.createdAt);
     const month = format(date, 'yyyy-MM');
@@ -31,6 +53,7 @@ const GamesTable = ({ refresh }: { refresh: boolean }) => {
   return (
     <div className='flex justify-center mt-10 px-4'>
       <div className='w-full sm:w-1/2'>
+        {message && <div className={`mb-4 ${messageColor}`}>{message}</div>}
         {Object.keys(groupedGames).map(month => (
           <div key={month} className='mb-8'>
             <h2 className='text-xl font-bold mb-4'>
@@ -47,6 +70,7 @@ const GamesTable = ({ refresh }: { refresh: boolean }) => {
                     <th>Number #4</th>
                     <th>Dealer</th>
                     <th>Prize</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -59,7 +83,17 @@ const GamesTable = ({ refresh }: { refresh: boolean }) => {
                       <td>{game.number4}</td>
                       <td>{game.dealer}</td>
                       <td className={`font-bold ${game.win ? 'text-success' : 'text-info'}`}>
-                        {game.win ? '+' + game.prize : game.prize}
+                        {game.win
+                          ? '+' + game.prize?.toLocaleString()
+                          : game.prize?.toLocaleString()}
+                      </td>
+                      <td>
+                        <div
+                          className='p-2 rounded-lg border-2 border-error hover:bg-error hover:cursor-pointer'
+                          onClick={() => handleDelete(game.id)}
+                        >
+                          <Trash2 size={22} className='text-error hover:text-white' />
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -91,6 +125,12 @@ const GamesTable = ({ refresh }: { refresh: boolean }) => {
                   <div className={`font-bold ${game.win ? 'text-success' : 'text-info'}`}>
                     <span className='font-bold'>Prize:</span>{' '}
                     {game.win ? '+' + game.prize : game.prize}
+                  </div>
+                  <div
+                    className='w-10 h-10 p-2 mt-3 rounded-lg border-2 border-error hover:bg-error hover:cursor-pointer flex items-center justify-center'
+                    onClick={() => handleDelete(game.id)}
+                  >
+                    <Trash2 size={22} className='text-error hover:text-white' />
                   </div>
                 </div>
               ))}
